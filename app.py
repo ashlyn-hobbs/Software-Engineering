@@ -1,192 +1,209 @@
-########################################################################
-################# S T A R T E R   C O D E ##############################
-########################################################################
-
-# Import libraries
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify, request, render_template, redirect, url_for, flash
 from flask_restful import Resource, Api, reqparse
 import requests
 import json
-import os
+
+from azuresqlconnector import *
 
 # Create the Flask app
 app = Flask(__name__)
 
-# Create an API object
-api = Api(app)
 
-# This decorator will require an API key to be provided through the header.
-def require_api_key(func):
-    def wrapper(*args, **kwargs):
-        api_key = request.headers.get('api-key')
+@app.route('/searchrecipes')
+def recipes():
+    return render_template('search_recipes.html')
 
-        if api_key == 'apiproject':
-            return func(*args, **kwargs)
-        else:
-            return jsonify({'message': 'Invalid API key.'})
+@app.route('/search_recipe_api', methods=['POST'])
+def api_search():
+    q_string = "https://api.spoonacular.com/recipes/complexSearch?apiKey=b818cf7fb2d74a918fe080c4ff1799ab&instructionsRequired=True&addRecipeInformation=True&fillIngredients=True&query="+str(request.form['query'])
 
-    return wrapper
+#    for i in data:
+#        q_string=q_string+str("&"+i+"="+str(data[i]))
 
-# Create Hello resource
-class Hello(Resource):
+    r = requests.get(q_string).json()
 
-	# corresponds to the GET request.
-	@require_api_key
-	def get(self):
+    recipes=[]
+    for i in r["results"]:
+        name = i["title"]
+        image=i['image']
+        id = i["id"]
+        summary = i["summary"]
 
-		return jsonify({'message': 'Hello!'})
+        ingredients = []
+        for j in i["extendedIngredients"]:
+            ingredients.append([j["name"],j["original"]])
 
-########################################################################
+        instructions = []
+        for j in i["analyzedInstructions"][0]["steps"]:
+            instructions.append(j["step"])
 
-# Find your resource below to modify your code!
-
-
-# Create Person 1 resource
-class Resource1(Resource):
-
-	# corresponds to the GET request.
-	@require_api_key
-	def get(self):
-
-		# creates the parser for obtaining the API argument "type" and reads into arguments
-		parser = reqparse.RequestParser()
-		parser.add_argument("type", type=str, location='args')
-		arguments=parser.parse_args()
-
-		playlist_access_token = "BQD8aRGz8_YapQuPXWMZaDRsajwChBezgqKVhgd7FaRZgPwMzcmf3RCkXW11E2ytf5ObCrxo_yOQJlnTzeI8FAOiGRfnmInGcNU6bmBGMhuC6AkkwLw"
-		# Define the headers with the bearer token
-		headers = {'Authorization': f'Bearer {playlist_access_token}' }
-
-		# depending on the "type" being either "inspire", "stoic", or "random",
-		# chooses one of three APIs to pull a quote from
-		if arguments["type"] == "Study":
-			playlist_url = ("https://api.spotify.com/v1/playlists/37i9dQZF1EIfMdgv54LYV9")
-		elif arguments["type"] == "Classical":
-			playlist_url = ("https://api.spotify.com/v1/playlists/37i9dQZF1DWWEJlAGA9gs0")
-		elif arguments["type"] == "Motivational":
-			playlist_url = ("https://api.spotify.com/v1/playlists/37i9dQZF1EIh4zcdX2LJPS")
-		elif arguments["type"] == "Heartbreak":
-			playlist_url = ("https://api.spotify.com/v1/playlists/37i9dQZF1EIeSXgC3Z17tF")
-		elif arguments["type"] == "Karaoke":
-			playlist_url = ("https://api.spotify.com/v1/playlists/37i9dQZF1EIdf4FT0py4jy")
-		elif arguments["type"] == "Party":
-			playlist_url = ("https://api.spotify.com/v1/playlists/37i9dQZF1EIdzRg9sDFEY3")
-		else:
-			return jsonify({"message": "Please pick from one of the avaliable playlists: Study, Classical, Motivational, Heartbreak, Karaoke or Party"})
-
-		# Send GET request to Spotify API with the appropriate URL and headers
-		playlist_response = requests.get(playlist_url, headers=headers)
-
-        # Check if request was successful
-		if playlist_response.status_code == 200:
-            # Return the API response in JSON format
-			return jsonify(playlist_response.json())
-		else:
-			return jsonify({"message": "Failed to fetch playlist data"}), playlist_response.status_code
-
-# Create Person 2 resource
-class SpotifySearch(Resource):
-
-    @require_api_key
-    # corresponds to the GET request
-    def get(self):
-        # Hardcoded access token for Resource 2
-        access_token = 'BQA1YI3PteZY4y8mDtBvC7l844rRP3Tx0NLe5IAVPcuC5BxDfSUKemOWKoXNqaeYc-SYNRoZQylgNCwoGKTjxFWyp8J2qV0zx-5kwQLdNx0-E7lIut4'
-
-        # Construct the headers with the access token
-        headers = {'Authorization': f'Bearer {access_token}'}
-
-        # Get parameters from the query string
-        query = request.args.get('q')
-        type = request.args.get('type')  # type can be 'artist', 'album', or 'track'
-
-        # Construct the URL for the Spotify API with the query parameter
-        url = f'https://api.spotify.com/v1/search?q={query}&type={type}'
-
-        # Make a GET request to the Spotify API
-        response = requests.get(url, headers=headers)
-
-        return jsonify(response.json())
-
-# Create Person 3 resource
-class Resource3(Resource):
-
-	# corresponds to the GET request.
-	@require_api_key
-	def get(self):
-
-		# creates the parser for obtaining the API argument "type" and reads into arguments
-		parser = reqparse.RequestParser()
-		parser.add_argument("type", type=str, location='args')
-		arguments=parser.parse_args()
-
-		# depending on the "type" being either "inspire", "stoic", or "random",
-		# chooses one of three APIs to pull a quote from
-		if arguments["type"] == "inspire":
-			quote = requests.get("http://api.forismatic.com/api/1.0/?method=getQuote&lang=en&format=json")
-		elif arguments["type"] == "stoic":
-			quote = requests.get("https://stoic.tekloon.net/stoic-quote")
-		elif arguments["type"] == "random":
-			quote = requests.get("https://zenquotes.io/api/random/")
-		else:
-			return jsonify({"message": "Please use only 'inspire', 'stoic', or 'random' for the 'type' argument"})
-
-		# returns the API response in json format
-		return jsonify(quote.json())
-
-# Create Person 4 resource
-class AnimalPictures(Resource):
-
-	# corresponds to the GET request.
-	@require_api_key
-	def get(self):
-
-        #creates parser for obtaining the API arguement "animal" and loads into arguments
-		parser = reqparse.RequestParser()
-		parser.add_argument("animal",type = str, location = 'args')
-		argument = parser.parse_args()
-
-        #api data from https://dog.ceo/dog-api/documentation/, https://shibe.online/
-        #depending on the animal argument pull from various APIs for each animal
-       
-		if argument['animal'] == "dog":
-			picture = requests.get('https://dog.ceo/api/breeds/image/random')
-		elif argument['animal'] == "cat":
-			picture = requests.get('https://shibe.online/api/cats?count=1')
-		elif argument['animal'] == "bird":
-			picture = requests.get('https://shibe.online/api/birds?count=1')
-		else:
-			return jsonify({"message": "Please only use 'dog','cat', or 'bird' for the 'animal' parameter"})
-
-		return jsonify(picture.json())
-	
-# Add the defined resources along with their corresponding urls
-api.add_resource(Hello, '/')
-
-api.add_resource(Resource1, '/Resource1')
-######################################
-# Person 1 additional resources here #
-
-######################################
-
-api.add_resource(SpotifySearch, '/Resource2')
-######################################
-# Person 2 additional resources here #
-
-######################################
-
-api.add_resource(Resource3, '/Resource3')
-######################################
-# Person 3 additional resources here #
-
-######################################
-
-api.add_resource(AnimalPictures, '/Resource4')
-######################################
-# Person 4 additional resources here #
+        vegetarian=["vegetarian"]
+        vegan=["vegan"]
+        glutenFree=["glutenFree"]
+        dairyFree=["dairyFree"]
+        diets=[]
+        if vegetarian:
+            diets.append(vegetarian)
+        if vegan:
+            diets.append(vegan)
+        if glutenFree:
+            diets.append(glutenFree)
+        if dairyFree:
+            diets.append(dairyFree)
 
 
-######################################
+        recipes.append({"RecipeName":name,"image":image,"ID":id,"Summary":summary,"diets":diets,"Ingredients":ingredients,"Instructions":instructions})
+
+    #fix to keep data and render page
+    return render_template('search_recipes.html', recipes=recipes)
+    
+    def post(self):
+        parser = reqparse.RequestParser()
+        parser.add_argument('userid', type=str, location='args')
+        arguments = parser.parse_args()
+        id = arguments['userid']
+
+        data = request.json
+        recipeID=data['recipeID']
+
+        q_string = "https://api.spoonacular.com/recipes/"+str(recipeID)+"/information?apiKey=b818cf7fb2d74a918fe080c4ff1799ab&instructionsRequired=True&addRecipeInformation=True&number=1&fillIngredients=True"+str(recipeID)
+        r = requests.get(q_string).json()
+
+        name=r['results']['title']
+        image=r['results']['image']
+        summary=r['results']['summary']
+        portions=r['results']['servings']
+        insturctions=''
+        increment=1
+        for i in r['results']['analyzedInstructions'][0]['steps']:
+            insturctions='Step '+str(increment)+': '+insturctions+i['step']+'\n'
+            increment+=1
+        ingredients=''
+        for i in r['results']['extendedIngredients']:
+            ingredients=ingredients+i['original']+'\n'
+        
+        badges = []
+        
+        vegetarian=r['results']["vegetarian"]
+        vegan=r['results']["vegan"]
+        glutenFree=r['results']["glutenFree"]
+        dairyFree=r['results']["dairyFree"]
+        diets=[]
+
+
+
+
+        # Initialize SQL connection
+        conn = SQLConnection()
+        conn = conn.getConnection()
+        cursor = conn.cursor()
+
+        sql_query = f""
+        
+        # Execute the SQL Query
+        cursor.execute(sql_query)
+
+        # Fetch the query results
+        records = cursor.fetchall()
+
+        # Close the cursor
+        cursor.close()
+
+        return jsonify({"message":"entry saved"})
+
+@app.route('/login')
+def login():
+    return render_template('login.html')
+
+@app.route('/adduser')
+def addUser():
+    return render_template('add_user.html')
+
+@app.route('/updateuser')
+def updateUser():
+    return render_template('update_user.html')
+
+@app.route('/')
+def startpage():
+    return render_template('homepage.html')
+
+@app.route('/landing')
+def landing():
+    return render_template('landing_page.html')
+
+@app.route('/savedrecipes')
+def cookbook():
+    return render_template('view_recipes.html')
+
+# This function handles adding a user to the database
+@app.route('/adduser', methods=['PUT'])
+def add_user():
+    user = request.form['username']
+    secret = request.form['password']
+    user_id = request.form[str(hash('username'))]
+
+    # Initialize SQL connection
+    conn = SQLConnection()
+    conn = conn.getConnection()
+    cursor = conn.cursor()
+
+    sql_query = f"""
+        INSERT INTO exampel.table
+        VALUES (
+        '{user_id}',
+        '{user}',
+        '{secret}'
+        );
+        """
+    
+    cursor.execute(sql_query)
+
+    conn.commit()
+
+    cursor.close()
+
+    # Redirect
+    return redirect(url_for('login'))
+
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    if request.method == 'POST':
+        username = request.form['username']
+        password = request.form['password']
+
+        try:
+            # Establish Azure SQL connection
+            conn = SQLConnection()
+            conn = conn.getConnection()
+            cursor = conn.cursor()
+
+            # Query Azure SQL for user credentials
+            sql_login = f"""
+            SELECT *
+            FROM FinalProject.Customer
+            WHERE username = '{username}' AND password = '{password}';
+            """
+
+            cursor.execute(sql_login)
+            result = cursor.fetchone()
+
+            if result:
+                # SUCCESS login
+                cursor.close()
+                flash('User added successfully!', 'success')
+                return redirect(url_for('landing')) # Redirect to landing page
+            else:
+                cursor.close()
+                return render_template('login.html', error='Invalid username or password') #Render login page with error message
+            
+        except Exception as e:
+            # handle exceptions
+            return render_template('login.html', error='An error occurred. Please try again later.')
+
+    # If GET request, render the login page 
+    return render_template('login.html')
+
+
 
 # Driver function
 if __name__ == '__main__':
